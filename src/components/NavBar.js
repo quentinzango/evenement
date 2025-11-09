@@ -48,13 +48,23 @@ export default function NavBar() {
       return;
     }
     const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
-    registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
-      if (res.ok) {
-        const p = { name, avatar: editAvatar || '' };
-        setProfile(p);
-        setEditProfileOpen(false);
-      }
-    });
+    if (!REGISTER_URL) {
+      alert('Configuration manquante: REACT_APP_SUPABASE_FN_REGISTER_DEVICE');
+      return;
+    }
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name })
+      .then((res) => {
+        if (res.ok) {
+          const p = { name, avatar: editAvatar || '' };
+          setProfile(p);
+          setEditProfileOpen(false);
+        } else {
+          alert('Échec de l\'enregistrement du profil');
+        }
+      })
+      .catch(() => {
+        alert('Erreur réseau lors de l\'enregistrement du profil');
+      });
   };
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const [showMenu, setShowMenu] = useState(false);

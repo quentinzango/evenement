@@ -99,7 +99,14 @@ export default function Gallery() {
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
     const publicUrl = urlData?.publicUrl || '';
     const type = file.type.startsWith('video') ? 'video' : 'image';
-    await supabase.from('media').insert({ type, filename: file.name, url: publicUrl, views: 0, likes: 0 });
+    const { data: inserted, error: insErr } = await supabase
+      .from('media')
+      .insert({ type, filename: file.name, url: publicUrl, views: 0, likes: 0 })
+      .select('id, type, filename, url, views, likes, created_at')
+      .single();
+    if (!insErr && inserted) {
+      setItems(prev => [inserted, ...prev]);
+    }
     e.target.value = '';
   };
 

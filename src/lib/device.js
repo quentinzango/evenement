@@ -27,12 +27,17 @@ export function storeToken(token) {
 export async function registerDevice({ functionUrl, display_name }) {
   const device_id = getOrCreateDeviceId();
   // Call Edge Function to register and get token
+  const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
   const resp = await fetch(functionUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(anonKey ? { 'apikey': anonKey, 'Authorization': 'Bearer ' + anonKey } : {}),
+    },
     body: JSON.stringify({ device_id, display_name })
   });
-  const json = await resp.json();
+  let json = null;
+  try { json = await resp.json(); } catch (e) { json = null; }
   if (resp.ok && json?.token) {
     storeToken(json.token);
     return { ok: true, profile: json.profile, token: json.token };

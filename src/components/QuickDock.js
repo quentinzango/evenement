@@ -36,11 +36,21 @@ export default function QuickDock({ onSendGlobal }) {
       return;
     }
     const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
-    registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
-      if (res.ok) {
-        setShowProfileModal(false);
-      }
-    });
+    if (!REGISTER_URL) {
+      alert('Configuration manquante: REACT_APP_SUPABASE_FN_REGISTER_DEVICE');
+      return;
+    }
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name })
+      .then((res) => {
+        if (res.ok) {
+          setShowProfileModal(false);
+        } else {
+          alert('Échec de la création du profil');
+        }
+      })
+      .catch(() => {
+        alert('Erreur réseau lors de la création du profil');
+      });
   };
 
   const onAvatarSelect = (file) => {
