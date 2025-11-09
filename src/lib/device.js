@@ -1,5 +1,3 @@
-import { supabase } from './supabase';
-
 const DEVICE_ID_KEY = 'device_id';
 const DEVICE_TOKEN_KEY = 'device_token';
 

@@ -4,14 +4,6 @@ import { useTheme } from '../ThemeContext';
 import Lightbox from '../components/Lightbox';
 import { supabase } from '../lib/supabase';
 
-const seed = [
-  //{ id: '1', type: 'image', src: 'https://picsum.photos/seed/nzie1/600/400', views: 1200, likes: 87 },
-  //{ id: '2', type: 'image', src: 'https://picsum.photos/seed/nzie2/600/400', views: 1500, likes: 120 },
-  //{ id: '3', type: 'image', src: 'https://picsum.photos/seed/nzie3/600/400', views: 2100, likes: 210 },
-  //{ id: '4', type: 'image', src: 'https://picsum.photos/seed/nzie4/600/400', views: 890, likes: 92 },
-  //{ id: '5', type: 'image', src: 'https://picsum.photos/seed/nzie5/600/400', views: 650, likes: 55 },
-];
-
 function useMedia() {
   const [items, setItems] = useState([]);
   const chanRef = useRef(null);
