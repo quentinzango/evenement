@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { layout } from '../theme';
 import { useTheme } from '../ThemeContext';
+import { registerDevice } from '../lib/device';
 
 const tabs = [
   { href: '/', label: 'Accueil' },
@@ -12,23 +13,13 @@ const tabs = [
 export default function NavBar() {
   const { theme, mode, toggle } = useTheme();
   const [currentPath, setCurrentPath] = useState(typeof window !== 'undefined' ? window.location.pathname : '/');
-  const [profile, setProfile] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem('profile') || 'null'); } catch (e) { return null; }
-  });
+  const [profile, setProfile] = React.useState(null);
 
   React.useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'profile') {
-        try { setProfile(e.newValue ? JSON.parse(e.newValue) : null); } catch (err) { setProfile(null); }
-      }
-    };
-    window.addEventListener('storage', onStorage);
     // update currentPath when navigation happens (back/forward)
     const onPop = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('storage', onStorage);
-    // cleanup popstate
-    // note: we separately remove popstate below because return only executes once; ensure both removed
+    return () => {};
   }, []);
   useEffect(() => {
     const onPop = () => setCurrentPath(window.location.pathname);
@@ -56,11 +47,14 @@ export default function NavBar() {
       alert('Le nom de profil est obligatoire');
       return;
     }
-    const p = { name, avatar: editAvatar || '' };
-    try { localStorage.setItem('profile', JSON.stringify(p)); } catch (e) { console.warn(e); }
-    setProfile(p);
-    try { window.dispatchEvent(new CustomEvent('profile-changed', { detail: p })); } catch (e) { }
-    setEditProfileOpen(false);
+    const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
+      if (res.ok) {
+        const p = { name, avatar: editAvatar || '' };
+        setProfile(p);
+        setEditProfileOpen(false);
+      }
+    });
   };
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const [showMenu, setShowMenu] = useState(false);

@@ -1,49 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../ThemeContext';
+import useMessagesSupabase from '../hooks/useMessagesSupabase';
+import { getStoredToken, registerDevice } from '../lib/device';
 
 export default function QuickDock({ onSendGlobal }) {
   const { theme } = useTheme();
   const [text, setText] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState(() => JSON.parse(localStorage.getItem('messages') || '[]'));
-  const [profile, setProfile] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('profile') || 'null');
-    } catch (e) { return null; }
-  });
+  const { messages, postMessage } = useMessagesSupabase();
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileName, setProfileName] = useState(profile?.name || '');
-  const [profileAvatar, setProfileAvatar] = useState(profile?.avatar || '');
+  const [profileName, setProfileName] = useState('');
+  const [profileAvatar, setProfileAvatar] = useState('');
 
-  useEffect(() => {
-    const i = setInterval(() => {
-      const raw = localStorage.getItem('messages');
-      const arr = raw ? JSON.parse(raw) : [];
-      setMessages(arr);
-    }, 1000);
-    return () => clearInterval(i);
-  }, []);
+  useEffect(() => {}, []);
 
   const recent = useMemo(() => messages.slice(-10).reverse(), [messages]);
 
   const send = () => {
     if (!text) return;
-    // require profile
-    if (!profile) {
+    const token = getStoredToken();
+    const POST_URL = process.env.REACT_APP_SUPABASE_FN_POST_MESSAGE;
+    if (!token) {
       setShowProfileModal(true);
       return;
     }
-    const msg = { id: Date.now(), text, mediaUrl: '', author: profile.name, avatar: profile.avatar || '', ts: new Date().toISOString() };
-    onSendGlobal?.(msg);
-    setText('');
-    // update local messages immediately so user sees the message without waiting for interval
-    try {
-      setMessages((prev) => {
-        const next = [...prev, msg];
-        try { localStorage.setItem('messages', JSON.stringify(next)); } catch (e) { }
-        return next;
-      });
-    } catch (e) { }
+    postMessage({ functionUrl: POST_URL, token, text }).then(() => {
+      setText('');
+    }).catch(() => {});
   };
 
   const saveProfile = () => {
@@ -52,12 +35,12 @@ export default function QuickDock({ onSendGlobal }) {
       alert('Le nom de profil est obligatoire');
       return;
     }
-    const p = { name, avatar: profileAvatar || '' };
-    try { localStorage.setItem('profile', JSON.stringify(p)); } catch (e) { console.warn(e); }
-    setProfile(p);
-    setShowProfileModal(false);
-    // notify other components in same tab
-    try { window.dispatchEvent(new CustomEvent('profile-changed', { detail: p })); } catch (e) { }
+    const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
+      if (res.ok) {
+        setShowProfileModal(false);
+      }
+    });
   };
 
   const onAvatarSelect = (file) => {
@@ -71,19 +54,7 @@ export default function QuickDock({ onSendGlobal }) {
     reader.readAsDataURL(file);
   };
 
-  // listen for profile updates triggered elsewhere in the app
-  useEffect(() => {
-    const handler = (e) => {
-      try {
-        const p = e.detail || (localStorage.getItem('profile') ? JSON.parse(localStorage.getItem('profile')) : null);
-        setProfile(p);
-        setProfileName(p?.name || '');
-        setProfileAvatar(p?.avatar || '');
-      } catch (err) { /* ignore */ }
-    };
-    window.addEventListener('profile-changed', handler);
-    return () => window.removeEventListener('profile-changed', handler);
-  }, []);
+  useEffect(() => {}, []);
 
   return (
     <div style={{
@@ -138,17 +109,20 @@ export default function QuickDock({ onSendGlobal }) {
       {isOpen && (
         <>
           <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {recent.map(m => (
-              <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden', flexShrink: 0 }}>
-                  {m.avatar ? <img src={m.avatar} alt={m.author} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: theme.colors.chip }} />}
+            {recent.map(m => {
+              const author = m.profiles?.display_name || 'Anonyme';
+              return (
+                <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden', flexShrink: 0 }}>
+                    <div style={{ width: '100%', height: '100%', background: theme.colors.chip }} />
+                  </div>
+                  <div style={{ background: theme.colors.surfaceElevated, color: theme.colors.text, border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: 8, flex: 1 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{author}</div>
+                    <div>{m.text}</div>
+                  </div>
                 </div>
-                <div style={{ background: theme.colors.surfaceElevated, color: theme.colors.text, border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: 8, flex: 1 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{m.author}</div>
-                  <div>{m.text}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ padding: 12, borderTop: `1px solid ${theme.colors.border}`, display: 'flex', gap: 8 }}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Écrire un message..." style={{ flex: 1, background: theme.colors.surfaceElevated, color: theme.colors.text, border: `1px solid ${theme.colors.border}`, padding: '10px 12px', borderRadius: 12 }} />

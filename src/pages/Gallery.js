@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Container from '../components/Container';
 import { useTheme } from '../ThemeContext';
 import Lightbox from '../components/Lightbox';
+import { supabase } from '../lib/supabase';
 
 const seed = [
   //{ id: '1', type: 'image', src: 'https://picsum.photos/seed/nzie1/600/400', views: 1200, likes: 87 },
@@ -12,91 +13,39 @@ const seed = [
 ];
 
 function useMedia() {
-  const [items, setItemsState] = useState(() => {
-    try {
-      const raw = localStorage.getItem('media');
-      if (!raw) return seed;
-      const parsed = JSON.parse(raw);
-      // Sanitize blob: URLs (they are not valid after reload). Replace any blob:... with null src so fallback shows.
-      const sanitized = parsed.map((m) => {
-        if (typeof m.src === 'string' && m.src.startsWith('blob:')) {
-          return { ...m, src: null };
-        }
-        return m;
-      });
-      return sanitized;
-    } catch (err) {
-      console.warn('Failed to read media from localStorage', err);
-      return seed;
-    }
-  });
+  const [items, setItems] = useState([]);
+  const chanRef = useRef(null);
 
-  const persist = (next) => {
-    // Allow updater function for atomic updates
-    if (typeof next === 'function') {
-      setItemsState((prev) => {
-        const computed = next(prev);
-        try {
-          localStorage.setItem('media', JSON.stringify(computed));
-          // broadcast to other tabs
-          try { if (window.BroadcastChannel) new BroadcastChannel('media_channel').postMessage({ type: 'update', items: computed }); } catch (e) { /* ignore */ }
-        } catch (err) {
-          console.warn('Failed to persist media to localStorage', err);
-        }
-        return computed;
-      });
-      return;
-    }
-
-    setItemsState(next);
-    try {
-      localStorage.setItem('media', JSON.stringify(next));
-      try { if (window.BroadcastChannel) new BroadcastChannel('media_channel').postMessage({ type: 'update', items: next }); } catch (e) { /* ignore */ }
-    } catch (err) {
-      // Could be quota exceeded; warn but keep app usable
-      console.warn('Failed to persist media to localStorage', err);
-    }
-  };
-
-  // Keep state in sync across tabs using storage event and BroadcastChannel
-  const bcRef = useRef(null);
   useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'media') {
-        try {
-          const raw = e.newValue;
-          const parsed = raw ? JSON.parse(raw) : [];
-          // sanitize blob: urls
-          const sanitized = parsed.map((m) => (typeof m.src === 'string' && m.src.startsWith('blob:')) ? { ...m, src: null } : m);
-          setItemsState(sanitized);
-        } catch (err) {
-          // ignore
-        }
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    if ('BroadcastChannel' in window) {
-      try {
-        bcRef.current = new BroadcastChannel('media_channel');
-        bcRef.current.onmessage = (ev) => {
-          if (ev.data?.type === 'update' && Array.isArray(ev.data.items)) {
-            const sanitized = ev.data.items.map((m) => (typeof m.src === 'string' && m.src.startsWith('blob:')) ? { ...m, src: null } : m);
-            setItemsState(sanitized);
-          }
-        };
-      } catch (e) {
-        // ignore
-      }
+    let mounted = true;
+    async function load() {
+      const { data, error } = await supabase
+        .from('media')
+        .select('id, type, filename, url, views, likes, created_at')
+        .order('created_at', { ascending: false });
+      if (!error && mounted) setItems(data || []);
     }
+    load();
+
+    chanRef.current = supabase.channel('media-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'media' }, (payload) => {
+        const rec = payload.new ?? payload.old;
+        setItems(prev => {
+          if (payload.eventType === 'INSERT') return [rec, ...prev];
+          if (payload.eventType === 'UPDATE') return prev.map(p => p.id === rec.id ? rec : p);
+          if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== rec.id);
+          return prev;
+        });
+      })
+      .subscribe();
 
     return () => {
-      window.removeEventListener('storage', onStorage);
-      try { bcRef.current?.close(); } catch (e) { }
+      try { supabase.removeChannel(chanRef.current); } catch (e) {}
+      mounted = false;
     };
   }, []);
 
-  return { items, setItems: persist };
+  return { items, setItems };
 }
 
 export default function Gallery() {
@@ -134,36 +83,30 @@ export default function Gallery() {
     return copy;
   }, [items, sort]);
 
-  const onUpload = (e) => {
+  const onUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Convert file to data URL so it survives page reloads (blob URLs do not)
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const newItem = {
-        id: String(Date.now()),
-        type: file.type.startsWith('video') ? 'video' : 'image',
-        src: dataUrl,
-        views: 0,
-        likes: 0
-      };
-      setItems((prev) => [newItem, ...prev]);
-    };
-    reader.onerror = (err) => {
-      console.error('FileReader error', err);
-      alert('Erreur lors de la lecture du fichier. Veuillez réessayer avec un autre fichier.');
-    };
-    reader.readAsDataURL(file);
-
-    // Clear the input value so the same file can be selected again if needed
+    const bucket = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET;
+    const path = `${Date.now()}_${file.name}`;
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+    if (upErr) {
+      alert('Erreur upload: ' + upErr.message);
+      e.target.value = '';
+      return;
+    }
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    const publicUrl = urlData?.publicUrl || '';
+    const type = file.type.startsWith('video') ? 'video' : 'image';
+    await supabase.from('media').insert({ type, filename: file.name, url: publicUrl, views: 0, likes: 0 });
     e.target.value = '';
   };
 
-  const toggleLike = (id) => {
-    setItems((prev) => prev.map(m => m.id === id ? { ...m, likes: (m.likes || 0) + 1 } : m));
-    // transient visual feedback for the like button
+  const toggleLike = async (id) => {
+    const current = items.find(m => m.id === id);
+    const nextLikes = (current?.likes || 0) + 1;
+    setItems((prev) => prev.map(m => m.id === id ? { ...m, likes: nextLikes } : m));
+    try { await supabase.from('media').update({ likes: nextLikes }).eq('id', id); } catch (e) {}
+    
     try { clearTimeout(likeTimeoutRef.current); } catch (e) { }
     setLastLikedId(id);
     likeTimeoutRef.current = setTimeout(() => setLastLikedId(null), 800);
@@ -225,8 +168,10 @@ export default function Gallery() {
             const thumbHeight = 200; // responsive thumbnail height
             const fallback = '/logo192.svg';
             return (
-              <div key={m.id} onClick={() => {
-                setItems((prev) => prev.map(x => x.id === m.id ? { ...x, views: (x.views || 0) + 1 } : x));
+              <div key={m.id} onClick={async () => {
+                const nextViews = (m.views || 0) + 1;
+                setItems((prev) => prev.map(x => x.id === m.id ? { ...x, views: nextViews } : x));
+                try { await supabase.from('media').update({ views: nextViews }).eq('id', m.id); } catch (e) {}
                 setActiveId(m.id);
               }} style={{
                 display: 'flex',
@@ -241,7 +186,7 @@ export default function Gallery() {
                 <div style={{ width: '100%', height: thumbHeight, overflow: 'hidden', display: 'block', background: theme.colors.surface }}>
                   {m.type === 'video' ? (
                     <video
-                      src={m.src || fallback}
+                      src={m.url || fallback}
                       controls
                       onError={(e) => { e.currentTarget.src = fallback; }}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
@@ -249,7 +194,7 @@ export default function Gallery() {
                   ) : (
                     <img
                       alt="media"
-                      src={m.src || fallback}
+                      src={m.url || fallback}
                       onError={(e) => { e.currentTarget.src = fallback; }}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />

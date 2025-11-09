@@ -46,12 +46,7 @@ function Shell() {
       <NavBar />
       <Page />
       {showQuickDock && (
-        <QuickDock onSendGlobal={(msg) => {
-          const raw = localStorage.getItem('messages');
-          const arr = raw ? JSON.parse(raw) : [];
-          const next = [...arr, msg];
-          localStorage.setItem('messages', JSON.stringify(next));
-        }} />
+        <QuickDock />
       )}
     </div>
   );

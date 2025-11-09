@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Container from '../components/Container';
 import { useTheme } from '../ThemeContext';
+import useMessagesSupabase from '../hooks/useMessagesSupabase';
+import { getStoredToken, registerDevice } from '../lib/device';
 
 export default function Discussion() {
   const { theme } = useTheme();
-  const [messages, setMessages] = useState(() => JSON.parse(localStorage.getItem('messages') || '[]'));
+  const { messages, postMessage } = useMessagesSupabase();
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const endRef = useRef(null);
@@ -13,12 +15,26 @@ export default function Discussion() {
 
   const send = () => {
     if (!text) return;
-    const msg = { id: Date.now(), text, author: 'Vous', ts: new Date().toISOString(), replyTo };
-    const next = [...messages, msg];
-    setMessages(next);
-    localStorage.setItem('messages', JSON.stringify(next));
-    setText('');
-    setReplyTo(null);
+    const token = getStoredToken();
+    const POST_URL = process.env.REACT_APP_SUPABASE_FN_POST_MESSAGE;
+    if (!token) {
+      const name = window.prompt('Entrez votre nom pour participer à la discussion :');
+      if (!name) return;
+      const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
+      registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
+        if (res.ok) {
+          postMessage({ functionUrl: POST_URL, token: res.token, text }).then(() => {
+            setText('');
+            setReplyTo(null);
+          }).catch(() => {});
+        }
+      });
+      return;
+    }
+    postMessage({ functionUrl: POST_URL, token, text }).then(() => {
+      setText('');
+      setReplyTo(null);
+    }).catch(() => {});
   };
 
   return (
@@ -26,20 +42,18 @@ export default function Discussion() {
       <Container style={{ paddingTop: 24, paddingBottom: 24 }}>
         <h1 style={{ color: theme.colors.text, margin: '8px 0 16px' }}>Group Discussion</h1>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {messages.map(m => (
-            <div key={m.id} style={{ maxWidth: 720, alignSelf: m.author === 'Vous' ? 'flex-end' : 'flex-start', background: m.author === 'Vous' ? theme.colors.primary : theme.colors.surfaceElevated, color: m.author === 'Vous' ? '#1a120c' : theme.colors.text, padding: '12px 14px', borderRadius: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>{m.author}</div>
-              {m.replyTo && (
-                <div style={{ borderLeft: `3px solid ${theme.colors.border}`, paddingLeft: 8, marginBottom: 6, color: theme.colors.textMuted }}>
-                  Réponse à: {messages.find(x => x.id === m.replyTo)?.text?.slice(0, 80) || 'message'}
+          {messages.map(m => {
+            const author = m.profiles?.display_name || 'Anonyme';
+            return (
+              <div key={m.id} style={{ maxWidth: 720, alignSelf: 'flex-start', background: theme.colors.surfaceElevated, color: theme.colors.text, padding: '12px 14px', borderRadius: 16 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{author}</div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                <div style={{ marginTop: 6 }}>
+                  <button onClick={() => setReplyTo(m.id)} style={{ background: 'transparent', color: 'inherit', border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: '4px 8px', cursor: 'pointer' }}>Répondre</button>
                 </div>
-              )}
-              <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
-              <div style={{ marginTop: 6 }}>
-                <button onClick={() => setReplyTo(m.id)} style={{ background: 'transparent', color: 'inherit', border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: '4px 8px', cursor: 'pointer' }}>Répondre</button>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={endRef} />
         </div>
 
