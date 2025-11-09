@@ -79,8 +79,18 @@ export default function Gallery() {
     const file = e.target.files?.[0];
     if (!file) return;
     const bucket = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET;
-    const path = `${Date.now()}_${file.name}`;
-    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+    const sanitize = (name) => {
+      const noDiacritics = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+      return noDiacritics
+        .replace(/["'’]/g, '')
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9._-]/g, '-');
+    };
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
+    const base = file.name.replace(/\.[^/.]+$/, '');
+    const safeName = sanitize(base) + (ext ? '.' + ext.toLowerCase() : '');
+    const path = `${Date.now()}_${safeName}`;
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false, contentType: file.type });
     if (upErr) {
       alert('Erreur upload: ' + upErr.message);
       e.target.value = '';
