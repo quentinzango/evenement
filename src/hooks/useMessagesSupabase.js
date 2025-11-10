@@ -11,8 +11,8 @@ export default function useMessagesSupabase() {
     async function load() {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, text, created_at, profiles(display_name)')
-        .order('created_at', { ascending: false });
+        .select('id, text, profile_id, created_at, profiles(display_name)')
+        .order('created_at', { ascending: true });
       if (error) console.error('load messages error', error);
       else if (mounted) setMessages(data || []);
     }
@@ -22,7 +22,7 @@ export default function useMessagesSupabase() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
         const rec = payload.new ?? payload.old;
         setMessages(prev => {
-          if (payload.eventType === 'INSERT') return [rec, ...prev];
+          if (payload.eventType === 'INSERT') return [...prev, rec];
           if (payload.eventType === 'UPDATE') return prev.map(p => p.id === rec.id ? rec : p);
           if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== rec.id);
           return prev;

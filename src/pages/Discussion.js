@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Container from '../components/Container';
 import { useTheme } from '../ThemeContext';
 import useMessagesSupabase from '../hooks/useMessagesSupabase';
-import { getStoredToken, registerDevice } from '../lib/device';
+import { getStoredToken, registerDevice, getOrCreateDeviceId } from '../lib/device';
+import { supabase } from '../lib/supabase';
 
 export default function Discussion() {
   const { theme } = useTheme();
@@ -10,8 +11,20 @@ export default function Discussion() {
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const endRef = useRef(null);
+  const [myProfileId, setMyProfileId] = useState(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Load my profile_id via device_id to distinguish own messages
+  useEffect(() => {
+    (async () => {
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { data } = await supabase.from('profiles').select('id').eq('device_id', deviceId).limit(1).single();
+        if (data?.id) setMyProfileId(data.id);
+      } catch (e) {}
+    })();
+  }, []);
 
   const send = () => {
     if (!text) return;
@@ -44,13 +57,24 @@ export default function Discussion() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.map(m => {
             const author = m.profiles?.display_name || 'Anonyme';
+            const mine = myProfileId && m.profile_id === myProfileId;
+            const bubbleStyle = {
+              maxWidth: 720,
+              alignSelf: mine ? 'flex-end' : 'flex-start',
+              background: mine ? theme.colors.primary : theme.colors.surfaceElevated,
+              color: mine ? '#1a120c' : theme.colors.text,
+              padding: '12px 14px',
+              borderRadius: 16,
+            };
             return (
-              <div key={m.id} style={{ maxWidth: 720, alignSelf: 'flex-start', background: theme.colors.surfaceElevated, color: theme.colors.text, padding: '12px 14px', borderRadius: 16 }}>
+              <div key={m.id} style={bubbleStyle}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>{author}</div>
                 <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
-                <div style={{ marginTop: 6 }}>
-                  <button onClick={() => setReplyTo(m.id)} style={{ background: 'transparent', color: 'inherit', border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: '4px 8px', cursor: 'pointer' }}>Répondre</button>
-                </div>
+                {!mine && (
+                  <div style={{ marginTop: 6 }}>
+                    <button onClick={() => setReplyTo(m.id)} style={{ background: 'transparent', color: 'inherit', border: `1px solid ${theme.colors.border}`, borderRadius: 12, padding: '4px 8px', cursor: 'pointer' }}>Répondre</button>
+                  </div>
+                )}
               </div>
             );
           })}
