@@ -39,9 +39,13 @@ export default function useMessagesSupabase() {
   // postMessage uses Edge Function endpoint to enforce server-side rules.
   async function postMessage({ functionUrl, token, text }) {
     if (!functionUrl) throw new Error('functionUrl required');
+    const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
     const res = await fetch(functionUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { 'apikey': anonKey, 'Authorization': 'Bearer ' + anonKey } : {}),
+      },
       body: JSON.stringify({ token, text })
     });
     const j = await res.json();

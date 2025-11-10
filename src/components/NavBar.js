@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { layout } from '../theme';
 import { useTheme } from '../ThemeContext';
-import { registerDevice } from '../lib/device';
+import { getOrCreateDeviceId, registerDevice } from '../lib/device';
+import { supabase } from '../lib/supabase';
 
 const tabs = [
   { href: '/', label: 'Accueil' },
@@ -30,6 +31,26 @@ export default function NavBar() {
   const [editName, setEditName] = React.useState(profile?.name || '');
   const [editAvatar, setEditAvatar] = React.useState(profile?.avatar || '');
 
+  // Load existing profile for this device on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const deviceId = getOrCreateDeviceId();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('display_name, avatar')
+          .eq('device_id', deviceId)
+          .limit(1)
+          .single();
+        if (!error && data?.display_name) {
+          setProfile({ name: data.display_name, avatar: data?.avatar || '' });
+          setEditName(data.display_name);
+          setEditAvatar(data?.avatar || '');
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
   const onAvatarSelect = (file) => {
     if (!file) return;
     if (file.size > 1024 * 1024) {
@@ -52,11 +73,11 @@ export default function NavBar() {
       alert('Configuration manquante: REACT_APP_SUPABASE_FN_REGISTER_DEVICE');
       return;
     }
-    registerDevice({ functionUrl: REGISTER_URL, display_name: name })
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name, avatar: editAvatar || '' })
       .then((res) => {
         if (res.ok) {
-          const p = { name, avatar: editAvatar || '' };
-          setProfile(p);
+          const p = res.profile || { display_name: name, avatar: editAvatar || '' };
+          setProfile({ name: p.display_name || name, avatar: p.avatar || editAvatar || '' });
           setEditProfileOpen(false);
         } else {
           alert('Échec de l\'enregistrement du profil');

@@ -40,7 +40,7 @@ export default function QuickDock({ onSendGlobal }) {
       alert('Configuration manquante: REACT_APP_SUPABASE_FN_REGISTER_DEVICE');
       return;
     }
-    registerDevice({ functionUrl: REGISTER_URL, display_name: name })
+    registerDevice({ functionUrl: REGISTER_URL, display_name: name, avatar: profileAvatar || '' })
       .then((res) => {
         if (res.ok) {
           setShowProfileModal(false);

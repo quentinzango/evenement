@@ -24,7 +24,7 @@ export function storeToken(token) {
 
 // registerDevice calls the Supabase Edge Function 'register_device'
 // functionUrl should be the full function URL provided by supabase when deployed.
-export async function registerDevice({ functionUrl, display_name }) {
+export async function registerDevice({ functionUrl, display_name, avatar }) {
   const device_id = getOrCreateDeviceId();
   // Call Edge Function to register and get token
   const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -34,7 +34,7 @@ export async function registerDevice({ functionUrl, display_name }) {
       'Content-Type': 'application/json',
       ...(anonKey ? { 'apikey': anonKey, 'Authorization': 'Bearer ' + anonKey } : {}),
     },
-    body: JSON.stringify({ device_id, display_name })
+    body: JSON.stringify({ device_id, display_name, avatar })
   });
   let json = null;
   try { json = await resp.json(); } catch (e) { json = null; }

@@ -38,14 +38,14 @@ Deno.serve(async (req) => {
   }
   try {
     const body = await req.json();
-    const { device_id, display_name } = body || {};
+    const { device_id, display_name, avatar } = body || {};
     if (!device_id) {
       return new Response(JSON.stringify({ error: 'device_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const { data, error } = await supabase
       .from('profiles')
-      .upsert({ device_id, display_name }, { onConflict: 'device_id' })
+      .upsert({ device_id, display_name, avatar }, { onConflict: 'device_id' })
       .select()
       .single();
     if (error) {
