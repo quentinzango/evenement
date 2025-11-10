@@ -9,9 +9,10 @@ export default function Lightbox({ item, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
   if (!item) return null;
+  const src = item.url || item.src || '';
   const download = () => {
     const a = document.createElement('a');
-    a.href = item.src;
+    a.href = src;
     a.download = item.id + (item.type === 'video' ? '.mp4' : '.jpg');
     document.body.appendChild(a);
     a.click();
@@ -23,14 +24,14 @@ export default function Lightbox({ item, onClose }) {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {item.type === 'video' ? (
             <video
-              src={item.src}
+              src={src}
               controls
               autoPlay
               playsInline
               style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 12, background: '#000' }}
             />
           ) : (
-            <img alt="media" src={item.src} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 12 }} />
+            <img alt="media" src={src} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 12 }} />
           )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
