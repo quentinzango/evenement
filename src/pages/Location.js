@@ -57,7 +57,6 @@ export default function Location() {
 
   useEffect(() => {
     let userMarker = null;
-    let destMarker = null;
     let line = null;
     let watchId = null;
     let destroyed = false;
@@ -86,7 +85,7 @@ export default function Location() {
         } catch (e) {}
 
         if (dest) {
-          destMarker = window.L.marker([dest.lat, dest.lng], { title: 'Destination' }).addTo(mapRef.current);
+          window.L.marker([dest.lat, dest.lng], { title: 'Destination' }).addTo(mapRef.current);
         }
 
         function updateLine(userPos) {
