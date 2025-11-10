@@ -12,16 +12,20 @@ export default function Discussion() {
   const [replyTo, setReplyTo] = useState(null);
   const endRef = useRef(null);
   const [myProfileId, setMyProfileId] = useState(null);
+  const [myDisplayName, setMyDisplayName] = useState('');
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Load my profile_id via device_id to distinguish own messages
+  // Load my profile (id + display_name) via device_id to distinguish own messages and for optimistic UI
   useEffect(() => {
     (async () => {
       try {
         const deviceId = getOrCreateDeviceId();
-        const { data } = await supabase.from('profiles').select('id').eq('device_id', deviceId).limit(1).single();
-        if (data?.id) setMyProfileId(data.id);
+        const { data } = await supabase.from('profiles').select('id, display_name').eq('device_id', deviceId).limit(1).single();
+        if (data?.id) {
+          setMyProfileId(data.id);
+          setMyDisplayName(data.display_name || '');
+        }
       } catch (e) {}
     })();
   }, []);
@@ -36,7 +40,10 @@ export default function Discussion() {
       const REGISTER_URL = process.env.REACT_APP_SUPABASE_FN_REGISTER_DEVICE;
       registerDevice({ functionUrl: REGISTER_URL, display_name: name }).then((res) => {
         if (res.ok) {
-          postMessage({ functionUrl: POST_URL, token: res.token, text }).then(() => {
+          // update local profile info for optimistic UI
+          setMyProfileId(res.profile?.id || null);
+          setMyDisplayName(res.profile?.display_name || name);
+          postMessage({ functionUrl: POST_URL, token: res.token, text, optimistic: { profile_id: res.profile?.id, display_name: res.profile?.display_name || name } }).then(() => {
             setText('');
             setReplyTo(null);
           }).catch(() => {});
@@ -44,7 +51,7 @@ export default function Discussion() {
       });
       return;
     }
-    postMessage({ functionUrl: POST_URL, token, text }).then(() => {
+    postMessage({ functionUrl: POST_URL, token, text, optimistic: (myProfileId && myDisplayName) ? { profile_id: myProfileId, display_name: myDisplayName } : undefined }).then(() => {
       setText('');
       setReplyTo(null);
     }).catch(() => {});
