@@ -6,6 +6,9 @@ export default function Location() {
   const { theme } = useTheme();
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
+  const routeLayerRef = useRef(null);
+  const lineRef = useRef(null);
+  const userInteractedRef = useRef(false);
   const [geoError, setGeoError] = useState(null);
   const [distanceKm, setDistanceKm] = useState(null);
   const DEST_QUERY = 'CX8W+F86 Fotetsa';
@@ -57,11 +60,7 @@ export default function Location() {
 
   useEffect(() => {
     let userMarker = null;
-    let line = null;
-    let routeLayer = null;
     let lastRouteFrom = null;
-    let lastUserPos = null;
-    let userInteracted = false;
     let watchId = null;
     let destroyed = false;
 
@@ -71,8 +70,8 @@ export default function Location() {
         if (destroyed) return;
         const L = window.L;
         mapRef.current = L.map(mapElRef.current, { zoomControl: true, attributionControl: true });
-        mapRef.current.on('movestart', () => { userInteracted = true; });
-        mapRef.current.on('zoomstart', () => { userInteracted = true; });
+        mapRef.current.on('movestart', () => { userInteractedRef.current = true; });
+        mapRef.current.on('zoomstart', () => { userInteractedRef.current = true; });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; OpenStreetMap contributors'
@@ -117,16 +116,16 @@ export default function Location() {
             const coords = j?.routes?.[0]?.geometry?.coordinates;
             if (Array.isArray(coords)) {
               const latlngs = coords.map(([lng, lat]) => [lat, lng]);
-              if (!routeLayer) {
-                routeLayer = window.L.polyline(latlngs, { color: '#22c55e', weight: 6, opacity: 0.95 }).addTo(mapRef.current);
-                try { routeLayer.bringToFront(); } catch (e) {}
+              if (!routeLayerRef.current) {
+                routeLayerRef.current = window.L.polyline(latlngs, { color: '#22c55e', weight: 6, opacity: 0.95 }).addTo(mapRef.current);
+                try { routeLayerRef.current.bringToFront(); } catch (e) {}
               } else {
-                routeLayer.setLatLngs(latlngs);
-                try { routeLayer.bringToFront(); } catch (e) {}
+                routeLayerRef.current.setLatLngs(latlngs);
+                try { routeLayerRef.current.bringToFront(); } catch (e) {}
               }
-              if (!userInteracted) {
+              if (!userInteractedRef.current) {
                 try {
-                  const bounds = routeLayer.getBounds();
+                  const bounds = routeLayerRef.current.getBounds();
                   mapRef.current.fitBounds(bounds.pad(0.15), { padding: [30, 30] });
                 } catch (e) {}
               }
@@ -137,13 +136,13 @@ export default function Location() {
         function updateLine(userPos) {
           if (dest && userPos) {
             const pts = [ [userPos.lat, userPos.lng], [dest.lat, dest.lng] ];
-            if (!line) line = window.L.polyline(pts, { color: '#0ea5e9', weight: 4, opacity: 0.8 }).addTo(mapRef.current);
-            else line.setLatLngs(pts);
+            if (!lineRef.current) lineRef.current = window.L.polyline(pts, { color: '#0ea5e9', weight: 4, opacity: 0.8 }).addTo(mapRef.current);
+            else lineRef.current.setLatLngs(pts);
             const d = distanceKmBetween(userPos, dest);
             if (d != null) setDistanceKm(Math.round(d * 10) / 10);
-            if (!userInteracted) {
+            if (!userInteractedRef.current) {
               try {
-                const bounds = routeLayer ? routeLayer.getBounds() : line.getBounds();
+                const bounds = routeLayerRef.current ? routeLayerRef.current.getBounds() : lineRef.current.getBounds();
                 mapRef.current.fitBounds(bounds, { padding: [30, 30] });
               } catch (e) {}
             }
@@ -164,7 +163,6 @@ export default function Location() {
             (pos) => {
               const { latitude, longitude } = pos.coords;
               const user = { lat: latitude, lng: longitude };
-              lastUserPos = user;
               if (!userMarker) {
                 userMarker = window.L.marker([user.lat, user.lng], { title: 'Vous' }).addTo(mapRef.current);
               } else {
