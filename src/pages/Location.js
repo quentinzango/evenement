@@ -204,10 +204,12 @@ export default function Location() {
             <button
               onClick={() => {
                 try {
-                  const bounds = (routeLayer && routeLayer.getBounds) ? routeLayer.getBounds() : (line && line.getBounds ? line.getBounds() : null);
+                  const bounds = (routeLayerRef.current && routeLayerRef.current.getBounds)
+                    ? routeLayerRef.current.getBounds()
+                    : (lineRef.current && lineRef.current.getBounds ? lineRef.current.getBounds() : null);
                   if (bounds) {
                     mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-                    userInteracted = false;
+                    userInteractedRef.current = false;
                   }
                 } catch (e) {}
               }}
