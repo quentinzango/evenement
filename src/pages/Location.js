@@ -60,6 +60,8 @@ export default function Location() {
     let line = null;
     let routeLayer = null;
     let lastRouteFrom = null;
+    let lastUserPos = null;
+    let userInteracted = false;
     let watchId = null;
     let destroyed = false;
 
@@ -69,22 +71,35 @@ export default function Location() {
         if (destroyed) return;
         const L = window.L;
         mapRef.current = L.map(mapElRef.current, { zoomControl: true, attributionControl: true });
+        mapRef.current.on('movestart', () => { userInteracted = true; });
+        mapRef.current.on('zoomstart', () => { userInteracted = true; });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(mapRef.current);
 
-        // Geocode destination via Nominatim
+        // Geocode destination with reinforcement (multiple queries, then ENV fallback)
         let dest = null;
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(DEST_QUERY)}`, {
-            headers: { 'Accept-Language': 'fr' }
-          });
+        async function nominatim(q) {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+          const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+          if (!res.ok) return null;
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            dest = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
           }
-        } catch (e) {}
+          return null;
+        }
+        try { dest = await nominatim(DEST_QUERY); } catch (e) {}
+        if (!dest) { try { dest = await nominatim('CX8W+F86, Fotetsa, Dschang, Cameroon'); } catch (e) {} }
+        if (!dest) { try { dest = await nominatim('Fotetsa, Dschang, Cameroon'); } catch (e) {} }
+        if (!dest) {
+          const envLat = parseFloat(process.env.REACT_APP_DEST_LAT || '');
+          const envLng = parseFloat(process.env.REACT_APP_DEST_LNG || '');
+          if (!Number.isNaN(envLat) && !Number.isNaN(envLng)) {
+            dest = { lat: envLat, lng: envLng };
+          }
+        }
 
         if (dest) {
           window.L.marker([dest.lat, dest.lng], { title: 'Destination' }).addTo(mapRef.current);
@@ -103,14 +118,18 @@ export default function Location() {
             if (Array.isArray(coords)) {
               const latlngs = coords.map(([lng, lat]) => [lat, lng]);
               if (!routeLayer) {
-                routeLayer = window.L.polyline(latlngs, { color: '#22c55e', weight: 5, opacity: 0.9, dashArray: '6,6' }).addTo(mapRef.current);
+                routeLayer = window.L.polyline(latlngs, { color: '#22c55e', weight: 6, opacity: 0.95 }).addTo(mapRef.current);
+                try { routeLayer.bringToFront(); } catch (e) {}
               } else {
                 routeLayer.setLatLngs(latlngs);
+                try { routeLayer.bringToFront(); } catch (e) {}
               }
-              try {
-                const bounds = routeLayer.getBounds();
-                mapRef.current.fitBounds(bounds.pad(0.15), { padding: [30, 30] });
-              } catch (e) {}
+              if (!userInteracted) {
+                try {
+                  const bounds = routeLayer.getBounds();
+                  mapRef.current.fitBounds(bounds.pad(0.15), { padding: [30, 30] });
+                } catch (e) {}
+              }
             }
           } catch (e) {}
         }
@@ -122,10 +141,12 @@ export default function Location() {
             else line.setLatLngs(pts);
             const d = distanceKmBetween(userPos, dest);
             if (d != null) setDistanceKm(Math.round(d * 10) / 10);
-            try {
-              const bounds = routeLayer ? routeLayer.getBounds() : line.getBounds();
-              mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-            } catch (e) {}
+            if (!userInteracted) {
+              try {
+                const bounds = routeLayer ? routeLayer.getBounds() : line.getBounds();
+                mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+              } catch (e) {}
+            }
             // fetch route polyline asynchronously (throttled by lastRouteFrom)
             updateRoute(userPos);
           } else if (userPos && !dest) {
@@ -143,6 +164,7 @@ export default function Location() {
             (pos) => {
               const { latitude, longitude } = pos.coords;
               const user = { lat: latitude, lng: longitude };
+              lastUserPos = user;
               if (!userMarker) {
                 userMarker = window.L.marker([user.lat, user.lng], { title: 'Vous' }).addTo(mapRef.current);
               } else {
@@ -180,6 +202,22 @@ export default function Location() {
 
         <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', boxShadow: theme.shadow.md, border: `1px solid ${theme.colors.border}`, height: 520 }}>
           <div ref={mapElRef} style={{ position: 'absolute', inset: 0 }} />
+          <div style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => {
+                try {
+                  const bounds = (routeLayer && routeLayer.getBounds) ? routeLayer.getBounds() : (line && line.getBounds ? line.getBounds() : null);
+                  if (bounds) {
+                    mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+                    userInteracted = false;
+                  }
+                } catch (e) {}
+              }}
+              style={{ background: theme.colors.primary, color: '#1a120c', border: 'none', padding: '8px 12px', borderRadius: 10, fontWeight: 700, cursor: 'pointer', boxShadow: theme.shadow.sm }}
+            >
+              Recentrer
+            </button>
+          </div>
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
