@@ -58,6 +58,8 @@ export default function Location() {
   useEffect(() => {
     let userMarker = null;
     let line = null;
+    let routeLayer = null;
+    let lastRouteFrom = null;
     let watchId = null;
     let destroyed = false;
 
@@ -88,6 +90,31 @@ export default function Location() {
           window.L.marker([dest.lat, dest.lng], { title: 'Destination' }).addTo(mapRef.current);
         }
 
+        async function updateRoute(userPos) {
+          if (!dest || !userPos) return;
+          const fromKey = `${userPos.lat.toFixed(5)},${userPos.lng.toFixed(5)}`;
+          if (lastRouteFrom === fromKey) return;
+          lastRouteFrom = fromKey;
+          try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${userPos.lng},${userPos.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`;
+            const r = await fetch(url);
+            const j = await r.json();
+            const coords = j?.routes?.[0]?.geometry?.coordinates;
+            if (Array.isArray(coords)) {
+              const latlngs = coords.map(([lng, lat]) => [lat, lng]);
+              if (!routeLayer) {
+                routeLayer = window.L.polyline(latlngs, { color: '#22c55e', weight: 5, opacity: 0.9, dashArray: '6,6' }).addTo(mapRef.current);
+              } else {
+                routeLayer.setLatLngs(latlngs);
+              }
+              try {
+                const bounds = routeLayer.getBounds();
+                mapRef.current.fitBounds(bounds.pad(0.15), { padding: [30, 30] });
+              } catch (e) {}
+            }
+          } catch (e) {}
+        }
+
         function updateLine(userPos) {
           if (dest && userPos) {
             const pts = [ [userPos.lat, userPos.lng], [dest.lat, dest.lng] ];
@@ -95,7 +122,12 @@ export default function Location() {
             else line.setLatLngs(pts);
             const d = distanceKmBetween(userPos, dest);
             if (d != null) setDistanceKm(Math.round(d * 10) / 10);
-            mapRef.current.fitBounds(line.getBounds(), { padding: [30, 30] });
+            try {
+              const bounds = routeLayer ? routeLayer.getBounds() : line.getBounds();
+              mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+            } catch (e) {}
+            // fetch route polyline asynchronously (throttled by lastRouteFrom)
+            updateRoute(userPos);
           } else if (userPos && !dest) {
             mapRef.current.setView([userPos.lat, userPos.lng], 15);
           } else if (!userPos && dest) {
