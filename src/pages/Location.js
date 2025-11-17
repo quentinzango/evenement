@@ -11,6 +11,7 @@ export default function Location() {
   const userInteractedRef = useRef(false);
   const [geoError, setGeoError] = useState(null);
   const [distanceKm, setDistanceKm] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null); // distance & durée via OSRM
   const DEST_QUERY = 'CX8W+F86 Fotetsa';
 
   // Utility to load external CSS/JS once
@@ -129,6 +130,17 @@ export default function Location() {
                   mapRef.current.fitBounds(bounds.pad(0.15), { padding: [30, 30] });
                 } catch (e) {}
               }
+
+              // Met à jour les infos de trajet (distance/durée routières) si disponibles
+              try {
+                const route = j?.routes?.[0];
+                if (route && typeof route.distance === 'number' && typeof route.duration === 'number') {
+                  const dk = Math.round((route.distance / 1000) * 10) / 10; // km
+                  const dm = Math.round(route.duration / 60); // minutes
+                  setRouteInfo({ distanceKm: dk, durationMin: dm });
+                  setDistanceKm(dk);
+                }
+              } catch (e) {}
             }
           } catch (e) {}
         }
@@ -222,7 +234,11 @@ export default function Location() {
 
         <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <a href={mapsUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', background: theme.colors.primary, color: '#1a120c', padding: '10px 14px', borderRadius: 12, fontWeight: 800, textDecoration: 'none' }}>Ouvrir l'itinéraire</a>
-          {distanceKm != null && (
+          {routeInfo ? (
+            <div style={{ color: theme.colors.textMuted }}>
+              Distance routière: ~{routeInfo.distanceKm} km · ~{routeInfo.durationMin} min
+            </div>
+          ) : distanceKm != null && (
             <div style={{ color: theme.colors.textMuted }}>Distance: ~{distanceKm} km</div>
           )}
           {geoError && <div style={{ color: theme.colors.textMuted }}>• {geoError}</div>}

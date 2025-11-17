@@ -140,7 +140,7 @@ export default function Gallery() {
             <div style={{ color: theme.colors.textMuted }}>Parcourez les souvenirs partagés par la communauté.</div>
           </div>
           <label style={{ background: theme.colors.primary, color: '#1a120c', padding: '10px 14px', borderRadius: theme.radius.lg, fontWeight: 700, cursor: 'pointer' }}>
-            Ajouter Média
+            Ajouter un souvenir
             <input type="file" accept="image/*,video/*" onChange={onUpload} style={{ display: 'none' }} />
           </label>
         </div>
