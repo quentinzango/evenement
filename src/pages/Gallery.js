@@ -166,15 +166,17 @@ export default function Gallery() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 14,
+          gridTemplateColumns: isMobile
+            ? 'repeat(auto-fill, minmax(150px, 1fr))'
+            : 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: isMobile ? 10 : 14,
           width: dockIsOpen ? 'calc(100% - 360px)' : '100%',
           boxSizing: 'border-box',
           transition: 'width 0.3s ease',
           marginTop: 20
         }}>
           {sorted.map((m) => {
-            const thumbHeight = 200; // responsive thumbnail height
+            const thumbHeight = isMobile ? 150 : 200; // responsive thumbnail height
             const fallback = '/logo192.svg';
             return (
               <div key={m.id} onClick={async () => {
@@ -228,13 +230,16 @@ export default function Gallery() {
           })}
         </div>
       </Container>
-  <Lightbox item={active} onClose={() => setActiveId(null)} />
+
+      <Lightbox
+        item={active}
+        onClose={() => setActiveId(null)}
+        items={items}
+        onSelect={(id) => setActiveId(id)}
+      />
     </div>
   );
 }
-
-
-
 
 
 
