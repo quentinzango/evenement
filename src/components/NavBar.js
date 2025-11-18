@@ -113,9 +113,16 @@ export default function NavBar() {
           width: 28,
           height: 28,
           borderRadius: 8,
-          background: theme.colors.primary,
+          overflow: 'hidden',
+          background: theme.colors.surface,
           boxShadow: theme.shadow.sm,
-        }} />
+        }}>
+          <img
+            src="/logo192.svg"
+            alt="Logo"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
         <div style={{ color: theme.colors.text, fontWeight: 700 }}>Nzie Memories</div>
       </div>
       {/* Desktop nav or mobile hamburger */}
