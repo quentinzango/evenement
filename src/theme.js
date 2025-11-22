@@ -27,13 +27,13 @@ export const darkTheme = {
 
 export const lightTheme = {
   colors: {
-    background: '#d9d0f7ff',
-    surface: '#141313ff',
-    surfaceElevated: '#fff9f4',
+    background: '#f3ebe5',      // fond clair et doux
+    surface: '#fff9f4',         // cartes / barre de navigation claires
+    surfaceElevated: '#ffffff', // niveaux au-dessus encore plus nets
     primary: '#d96b1a',
     primaryHover: '#ff8c3a',
-    text: '#2b1e16',
-    textMuted: '#dfd7d2ff',
+    text: '#2b1e16',            // texte foncé lisible sur surface claire
+    textMuted: '#6b4b3a',       // texte atténué mais encore bien lisible
     border: '#eadfd7',
     chip: '#f1e8e1',
     success: '#2e7d32',
